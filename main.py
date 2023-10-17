@@ -254,7 +254,7 @@ class App(customtkinter.CTk):
         self.after(1000, self.update_server_status)
 
     def open_github(self):
-        url = "https://github.com/"
+        url = "https://github.com/TravistyTrav/Flyff-Server-Starter"
         webbrowser.open(url)
     
 
