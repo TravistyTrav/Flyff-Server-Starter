@@ -1,0 +1,6 @@
+build/
+dist/
+
+main.spec
+
+server_manager_data.pkl
