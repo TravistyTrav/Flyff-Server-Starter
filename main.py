@@ -195,12 +195,7 @@ class App(customtkinter.CTk):
 
         # Server Status Frame
         self.server_status_frame = server_status(master=self, app=self)
-        self.server_status_frame.grid(row=0, column=1, padx=20, pady=(50, 20), sticky="ns")
-
-        # Create the server_status_frame
-        self.server_status_frame = server_status(master=self, app=self)
-        self.server_status_frame.grid(row=0, column=1, padx=20, pady=(50, 20), sticky="ns")
-
+        self.server_status_frame.grid(row=0, column=1, padx=20, pady=(50, 20), sticky="nw")
 
         # Schedule the initial update and status check
         self.after(1000, self.update_server_status)
