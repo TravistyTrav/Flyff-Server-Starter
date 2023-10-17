@@ -9,6 +9,7 @@ import time
 import win32gui
 import win32con
 import webbrowser
+import shutil
 from config import server_info
 from image_constants import (
     flyff_logo_star,
@@ -24,10 +25,12 @@ from image_constants import (
 
 # Define the data file name
 DATA_FILE = "server_manager_data.pkl"
-DIR_FILE = "server_manager_dir_data.pkl"
 
 customtkinter.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("dark-blue")  # Themes: "blue" (standard), "green", "dark-blue"
+
+
+
 
 class settings_window(customtkinter.CTkToplevel):
     def __init__(self, *args, **kwargs):
@@ -36,6 +39,11 @@ class settings_window(customtkinter.CTkToplevel):
         self.title("Server Manager - Configuration")
 
         self.entries = []  # Store Entry widgets in a list
+
+        merge_compiles_source_input = customtkinter.CTkEntry(self, placeholder_text="Path to Server Files...")
+        merge_compiles_source_input.grid(row=1, column=2, padx=20, pady=5, sticky="we")
+        self.merge_compiles_source_input = merge_compiles_source_input
+
         self.load_data()  # Load saved data when the application starts
 
         for server_key, server in enumerate(server_info):
@@ -48,7 +56,7 @@ class settings_window(customtkinter.CTkToplevel):
 
             # If there is saved data for this server, populate the entry
             if server_key in self.data:
-                entry.insert(0, self.data[server_key])
+                entry.insert(0, self.data[server_key]['path'])
 
             button = customtkinter.CTkButton(self, text="Select", command=lambda e=entry, s=server_key: self.select_exe_file(e, s))
             button.grid(row=server['row_start'] + 1, column=1, padx=(0, 20), pady=(5, 10))
@@ -62,11 +70,7 @@ class settings_window(customtkinter.CTkToplevel):
         status_label = customtkinter.CTkLabel(self, text="Select path to Server Files", anchor="e")
         status_label.grid(row=0, column=2, padx=20, pady=(10, 0), sticky="w")
 
-        merge_compiles_source_input = customtkinter.CTkEntry(self, placeholder_text="Path to Server Files...")
-        merge_compiles_source_input.grid(row=1, column=2, padx=20, pady=5, sticky="we")
-        self.merge_compiles_source_input = merge_compiles_source_input
-
-        select_source_location = customtkinter.CTkButton(self, text="Select")
+        select_source_location = customtkinter.CTkButton(self, text="Select", command=self.select_source_directory)
         select_source_location.grid(row=1, column=3, padx=(5, 20), pady=5, sticky='w')
 
 
@@ -76,7 +80,7 @@ class settings_window(customtkinter.CTkToplevel):
         if file_path:
             entry.delete(0, "end")
             entry.insert(0, file_path)
-            self.data[server_key] = file_path  # Save the data when the user selects a file
+            self.data[server_key] = {'path': file_path, 'type': 'exe'}  # Save the data when the user selects a file
             self.save_data()
 
     def save_data(self):
@@ -90,14 +94,33 @@ class settings_window(customtkinter.CTkToplevel):
         except FileNotFoundError:
             self.data = {}  # Default empty data
     
+    # Modify the load_data method
+    def load_data(self):
+        try:
+            with open(DATA_FILE, 'rb') as file:
+                self.data = pickle.load(file)
+                if 'merge_compiles' in self.data:
+                    # If 'merge_compiles' data is available, populate merge_compiles_source_input
+                    self.merge_compiles_source_input.delete(0, "end")
+                    self.merge_compiles_source_input.insert(0, self.data['merge_compiles']['path'])
+        except FileNotFoundError:
+            self.data = {}  # Default empty data
+    
     def clear_data(self):
         self.data = {}  # Clear the data dictionary
         for entry in self.entries:
             entry.delete(0, "end")  # Clear all Entry widgets
-        self.save_data()  # Save the cleared data
+        self.save_data()
 
+    def select_source_directory(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.merge_compiles_source_input.delete(0, "end")
+            self.merge_compiles_source_input.insert(0, directory)
+            self.data['merge_compiles'] = {'path': directory, 'type': 'dir'}  # Save the directory data
+            self.save_data()
 
-    
+   
 class server_status(customtkinter.CTkFrame):
     def __init__(self, master, app, **kwargs):
         super().__init__(master, **kwargs)
@@ -157,7 +180,7 @@ class App(customtkinter.CTk):
                                                            command=self.open_github)
         self.string_input_button.grid(row=2, column=0, padx=20, pady=(10, 10))
         self.merge_compile_button = customtkinter.CTkButton(self.sidebar_frame, text="Merge Compiles", image=edit_icon,
-                                                           command=self.open_input_dialog_event)
+                                                           command=self.copy_files)
         self.merge_compile_button.grid(row=7, column=0, padx=20, pady=(10, 10))
         self.string_input_button = customtkinter.CTkButton(self.sidebar_frame, image=options_icon, text="Configure",
                                                            command=self.open_settingswindow)
@@ -209,24 +232,26 @@ class App(customtkinter.CTk):
     def start_servers(self):
         self.load_data()  # Load saved data
 
-        for server_key, exe_path in self.data.items():
-            if os.path.isfile(exe_path):
-                try:
-                    # Execute the executable and append the subprocess to the list
-                    process = subprocess.Popen(exe_path, cwd=os.path.dirname(exe_path))
-                    self.subprocesses.append(process)
+        for server_key, server_data in self.data.items():
+            if server_data.get('type') == 'exe':
+                exe_path = server_data.get('path', '')
+                if os.path.isfile(exe_path):
+                    try:
+                        # Execute the executable and append the subprocess to the list
+                        process = subprocess.Popen(exe_path, cwd=os.path.dirname(exe_path))
+                        self.subprocesses.append(process)
 
-                    # Introduce a 1-second delay (adjust as needed)
-                    time.sleep(1)
+                        # Introduce a 1-second delay (adjust as needed)
+                        time.sleep(1)
 
-                    # Minimize the application window
-                    hwnd = win32gui.GetForegroundWindow()
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                        # Minimize the application window
+                        hwnd = win32gui.GetForegroundWindow()
+                        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
-                except Exception as e:
-                    print(f"Error running executable for server {server_key}: {e}")
-            else:
-                print(f"Executable file not found for server {server_key}")
+                    except Exception as e:
+                        print(f"Error running executable for server {server_key}: {e}")
+                else:
+                    print(f"Executable file not found for server {server_key}")
 
 
     def stop_servers(self):
@@ -252,6 +277,33 @@ class App(customtkinter.CTk):
     
         # Schedule the next update
         self.after(1000, self.update_server_status)
+
+    def copy_files(self):
+        # Load the saved data to get the source directory
+        self.load_data()
+        source_directory = self.data.get('merge_compiles', {}).get('path', '')
+        source_directory = source_directory.replace('\\', '/')
+
+        # Define source and destination paths for each file copy
+        file_copies = [
+            (os.path.join(source_directory, r"Source/Output\AccountServer\Release\AccountServer.exe"), os.path.join(source_directory, r"Server\\Program\\1. Account.exe")),
+            (os.path.join(source_directory, r"Source\Output\CacheServer\Release\CacheServer.exe"), os.path.join(source_directory, r"Server\\Program\\6. Cache.exe")),
+            (os.path.join(source_directory, r"Source\Output\Certifier\Release\Certifier.exe"), os.path.join(source_directory, r"Server\\Program\\2. Certifier.exe")),
+            (os.path.join(source_directory, r"Source\Output\CoreServer\Release\CoreServer.exe"), os.path.join(source_directory, r"Server\\Program\\4. Core.exe")),
+            (os.path.join(source_directory, r"Source\Output\DatabaseServer\Release\DatabaseServer.exe"), os.path.join(source_directory, r"Server\\Resource\\3. Database.exe")),
+            (os.path.join(source_directory, r"Source\Output\LoginServer\Release\LoginServer.exe"), os.path.join(source_directory, r"Server\\Program\\5. Login.exe")),
+            (os.path.join(source_directory, r"Source\Output\WorldServer\Release\WorldServer.exe"), os.path.join(source_directory, r"Server\\Resource\\7. World.exe")),
+            (os.path.join(source_directory, r"Source\Output\Neuz\NoGameguard\Neuz.exe"), os.path.join(source_directory, r"Client\\Neuz.exe")),
+            (os.path.join(source_directory, r"Source\Output\BetaPatchClient\Debug\BetaPatchClient.exe"), os.path.join(source_directory, r"Client\\Flyff.exe")),
+        ]
+        for src, dest in file_copies:
+            try:
+                shutil.copy(src, dest)
+                print(f"File copied: {src} -> {dest}")
+            except FileNotFoundError:
+                print(f"File not found: {src}")
+            except Exception as e:
+                print(f"Error copying file: {src} -> {dest}\nError: {e}")
 
     def open_github(self):
         url = "https://github.com/TravistyTrav/Flyff-Server-Starter"
