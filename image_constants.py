@@ -36,3 +36,7 @@ edit_icon = customtkinter.CTkImage(light_image=Image.open('img/ui/edit.png'),
 feedback_icon = customtkinter.CTkImage(light_image=Image.open('img/ui/feedback_w.png'),
                                       dark_image=Image.open('img/ui/feedback_w.png'),
                                       size=(15, 15))
+
+play_icon = customtkinter.CTkImage(light_image=Image.open('img/ui/play.png'),
+                                  dark_image=Image.open('img/ui/play.png'),
+                                  size=(15, 15))

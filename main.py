@@ -1,14 +1,14 @@
 import tkinter
 import tkinter.messagebox
 from tkinter import filedialog
-import subprocess
-import os
 import customtkinter
 import pickle
+import webbrowser
 import time
+import subprocess
 import win32gui
 import win32con
-import webbrowser
+import os
 import shutil
 from config import server_info
 from image_constants import (
@@ -20,7 +20,7 @@ from image_constants import (
     start_icon,
     stop_icon,
     edit_icon,
-    feedback_icon
+    play_icon
 )
 
 # Define the data file name
@@ -28,9 +28,6 @@ DATA_FILE = "server_manager_data.pkl"
 
 customtkinter.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("dark-blue")  # Themes: "blue" (standard), "green", "dark-blue"
-
-
-
 
 class settings_window(customtkinter.CTkToplevel):
     def __init__(self, *args, **kwargs):
@@ -43,6 +40,10 @@ class settings_window(customtkinter.CTkToplevel):
         merge_compiles_source_input = customtkinter.CTkEntry(self, placeholder_text="Path to Server Files...")
         merge_compiles_source_input.grid(row=1, column=2, padx=20, pady=5, sticky="we")
         self.merge_compiles_source_input = merge_compiles_source_input
+
+        entry_game_launcher_source = customtkinter.CTkEntry(self, placeholder_text="Path to Server Files...")
+        entry_game_launcher_source.grid(row=3, column=2, padx=20, pady=5, sticky="we")
+        self.entry_game_launcher_source = entry_game_launcher_source
 
         self.load_data()  # Load saved data when the application starts
 
@@ -74,6 +75,13 @@ class settings_window(customtkinter.CTkToplevel):
         select_source_location.grid(row=1, column=3, padx=(5, 20), pady=5, sticky='w')
 
 
+        title_game_launcher_source = customtkinter.CTkLabel(self, text="Select path to Server Files", anchor="e")
+        title_game_launcher_source.grid(row=2, column=2, padx=20, pady=(10, 0), sticky="w")
+
+        select_game_launcher_source = customtkinter.CTkButton(self, text="Select", command=self.select_game_launcher)
+        select_game_launcher_source.grid(row=3, column=3, padx=(5, 20), pady=5, sticky='w')
+
+
     # Define select_exe_file as a method of the class
     def select_exe_file(self, entry, server_key):
         file_path = filedialog.askopenfilename(filetypes=[("Executable Files", "*.exe")])
@@ -83,16 +91,32 @@ class settings_window(customtkinter.CTkToplevel):
             self.data[server_key] = {'path': file_path, 'type': 'exe'}  # Save the data when the user selects a file
             self.save_data()
 
+    def select_source_directory(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.merge_compiles_source_input.delete(0, "end")
+            self.merge_compiles_source_input.insert(0, directory)
+            self.data['merge_compiles'] = {'path': directory, 'type': 'dir'}  # Save the directory data
+            self.save_data()
+
+    def select_game_launcher(self):
+        game_launcher_dir = filedialog.askopenfilename(filetypes=[("All Files", "*.*")])
+        if game_launcher_dir:
+            self.entry_game_launcher_source.delete(0, "end")
+            self.entry_game_launcher_source.insert(0, game_launcher_dir)
+            self.data['game_launcher'] = {'path': game_launcher_dir, 'type': 'game_launcher_dir'}  # Save the directory data
+            self.save_data()
+
     def save_data(self):
         with open(DATA_FILE, 'wb') as file:
             pickle.dump(self.data, file)
 
-    def load_data(self):
-        try:
-            with open(DATA_FILE, 'rb') as file:
-                self.data = pickle.load(file)
-        except FileNotFoundError:
-            self.data = {}  # Default empty data
+    #def load_data(self):
+    #    try:
+    #        with open(DATA_FILE, 'rb') as file:
+    #            self.data = pickle.load(file)
+    #    except FileNotFoundError:
+    #        self.data = {}  # Default empty data
     
     # Modify the load_data method
     def load_data(self):
@@ -103,6 +127,10 @@ class settings_window(customtkinter.CTkToplevel):
                     # If 'merge_compiles' data is available, populate merge_compiles_source_input
                     self.merge_compiles_source_input.delete(0, "end")
                     self.merge_compiles_source_input.insert(0, self.data['merge_compiles']['path'])
+                if 'game_launcher' in self.data:
+                    # If 'merge_compiles' data is available, populate merge_compiles_source_input
+                    self.entry_game_launcher_source.delete(0, "end")
+                    self.entry_game_launcher_source.insert(0, self.data['game_launcher']['path'])
         except FileNotFoundError:
             self.data = {}  # Default empty data
     
@@ -111,14 +139,6 @@ class settings_window(customtkinter.CTkToplevel):
         for entry in self.entries:
             entry.delete(0, "end")  # Clear all Entry widgets
         self.save_data()
-
-    def select_source_directory(self):
-        directory = filedialog.askdirectory()
-        if directory:
-            self.merge_compiles_source_input.delete(0, "end")
-            self.merge_compiles_source_input.insert(0, directory)
-            self.data['merge_compiles'] = {'path': directory, 'type': 'dir'}  # Save the directory data
-            self.save_data()
 
    
 class server_status(customtkinter.CTkFrame):
@@ -138,7 +158,6 @@ class server_status(customtkinter.CTkFrame):
 
             # Add the status label to the list
             self.status_labels.append(status_label)
-
 
         start_server_button = customtkinter.CTkButton(self, text="Start Server", image=start_icon, command=self.app.start_servers)
         start_server_button.grid(row=row + 1, column=0, padx=20, pady=(20, 10), sticky="ew", columnspan=2)
@@ -179,6 +198,9 @@ class App(customtkinter.CTk):
         self.string_input_button = customtkinter.CTkButton(self.sidebar_frame, image=github_logo, text="Github",
                                                            command=self.open_github)
         self.string_input_button.grid(row=2, column=0, padx=20, pady=(10, 10))
+        self.launch_game_button = customtkinter.CTkButton(self.sidebar_frame, text="Launch Game", image=play_icon,
+                                                           command=self.launch_game)
+        self.launch_game_button.grid(row=6, column=0, padx=20, pady=(10, 10))
         self.merge_compile_button = customtkinter.CTkButton(self.sidebar_frame, text="Merge Compiles", image=edit_icon,
                                                            command=self.copy_files)
         self.merge_compile_button.grid(row=7, column=0, padx=20, pady=(10, 10))
@@ -186,7 +208,6 @@ class App(customtkinter.CTk):
                                                            command=self.open_settingswindow)
         self.string_input_button.grid(row=8, column=0, padx=20, pady=(10, 20))
         self.settings_window = None
-
         self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
         self.appearance_mode_label.grid(row=9, column=0, padx=20, pady=(10, 0))
         self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame, values=["Dark", "Light"],
@@ -299,6 +320,19 @@ class App(customtkinter.CTk):
                 print(f"File not found: {src}")
             except Exception as e:
                 print(f"Error copying file: {src} -> {dest}\nError: {e}")
+
+    def launch_game(self):
+        # Load the saved data to get the game launcher file
+        self.load_data()
+        launcher_path = self.data.get('game_launcher', {}).get('path', '')
+
+        if launcher_path:
+                try:
+                    #Execute the executable and append the subprocess to the list
+                    subprocess.Popen(launcher_path, cwd=os.path.dirname(launcher_path))
+                    print(f'Launch Successful')
+                except Exception as e:
+                       print(f"Directory Not Found: {e}")
 
     def open_github(self):
         url = "https://github.com/TravistyTrav/Flyff-Server-Starter"
